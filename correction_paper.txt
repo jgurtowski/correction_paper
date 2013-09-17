@@ -1,0 +1,156 @@
+
+Introduction
+	-Currently Available Pipelines
+		  -pacbioToCA, HGAP
+		  
+	-Current Issues
+		 -HGAP
+			-High Coverage (Expensive)
+		 -pb2ca
+			-High error regions missed by Overlapper  		
+			-Read splitting on low coverage regions
+
+
+Methods			
+	-Preassembly of Unitigs
+		-Helps to span localized regions of high error
+	-Mummer/Nucmer
+		-Accurate alignment
+		-Supports high error rate
+	-Delta-Filter
+		-Finds best set of unitigs (consensus approach
+		       	    	   	   no longer viable)
+							       		
+Discussion
+
+	-Rice Assembly (n50 improvement)
+	-Performance (timming?)
+	-Reliability (compared to pacbioToCA)
+
+	-Hybrid HGAP attempts were unsuccessful
+	-PacbioToCA with Blasr made no difference
+
+	-(Rice Simulations?, rest of paper will talk about these)
+
+
+Introduction
+
+One of the main technical hurdles involved in using Pacific
+Bioscience's long reads (PBLR) in de novo assembly is the relatively
+high per-base error rate. In contrast to other second generation
+sequencing platforms such as Illumina's HiSeq which has a per base
+error rate of approximately 2%, PBLRs have a reported error rate of
+15% (**HGAP reference). As of current, there are no assemblers that
+are equipped to handle data with this high of an error rate
+natively. Naturally, read correction pipelines have been developed to
+deal with this problem. Koren, Schatz et el developed a method using
+the Celera Assembler's overlap machinery to correct PBLRs using
+high-identity short read data produced from the same library. This
+method works by mapping short high-identity reads to the PBLRs and
+building a consensus sequence. Regions without short read coverage are
+trimmed out of the longer read (splitting the PBLR if necessary). A
+similar approached, HGAP, developed by Pacific Biosciences does not
+require a second high-identity library. Instead, it relies on high PBLR
+coverage to overcome the high error rate in consensus building. Both
+HGAP and pacbioToCA perform well on bacterial size genomes where high
+PBLR coverage can be obtained relatively inexpensively. However, when
+used for de novo assembly projects of eukaryotic genomes which are
+larger and have more complicated repeat structures, these tools begin
+to falter. Because HGAP requires very high PBLR coverage, it is
+generally quite expensive to obtain the data necessary to run the
+pipeline. As of this time, no public Eukaryotic PBLR data exists that
+is compatible with the HGAP pipeline(May be wrong). Because pacbioToCA
+uses lower cost libraries, it is more amenable to eukaryotic de novo
+assembly, and will therefore be the focus of much of the following
+discussion.
+
+After analyzing data produced by the pacbioToCA pipeline for a de novo
+assembly of the rice genome, a couple of issues became
+apparent. Firstly, pacbioToCA is implemented with an aggressive
+trimming algorithm to remove adapter and low identity sequence. For
+bacterial genomes with high PBLR coverage, this is a favorable
+approach. However, aggressive trimming and splitting can be a problem
+in Eukaryotic assemblies where coverage is much lower and sequence
+continuity rather than per base precision is of higher importance. In
+our experience aggressive trimming with low coverage PBLR data leads
+to a highly fractured assembly. Under closer scrutiny, it became
+apparent that trimming was occurring in regions of reads that had a
+locally higher error rate. Apparently, the Celera overlapper used by
+pacbioToCA has a maximum error rate of 20% causing it to drop
+alignments in these localized regions.  When looking at reads that had
+been split by the pacbioToCA pipeline, there was a clear negative
+correlation between error rate and short-read mapability. (Insert
+Figure). The error rate was determined by mapping the PBLR back to the
+rice reference genome. It is clear that in order to improve the
+correction of the PBLR a more sensitive aligner that can support error
+rates greater than 20% was necessary. In addition, it was also
+speculated that these local regions of high error rate could be quite
+large.  It would therefore behoove of us to use the longest possible
+short-reads to span these regions localized error.
+
+
+Methods
+
+Regions of high error rate can be of varying size. In order to span
+these regions and build the most contiguous assembly, we preassemble
+the short reads into uniquely assembleable segments called unitigs
+(**Myers Reference). These unitigs are then used for the correction of
+the PBLRs.  Although these unitigs can be created from any assembler,
+the Celera assembler is recommended because it guarantees that every
+read is incorporated into a unitig. Therefore all short-read
+information is carried over into the resulting set of unitigs (i.e. no
+information is lost in the preassembly process). The preassembly
+generates longer unitig sequences from the short-reads, creating a
+better opportunity to span long regions of high error.  To align the
+preassembled unitigs to the PBLRs an accurate aligner that can
+tolerate high local error was needed. The Mummer suite of tools
+provides a highly accurate nucleotide alignment script called Nucmer
+(**Mummer reference). Nucmer has many options for tuning alignments
+including the ability to control how long regions of low identity can
+be before the aligner gives up.
+
+Because we are aligning unitigs, rather than short-reads, a consensus
+approach can no longer be applied. The unitigs themselves are a
+consensus of many short reads with unique overlaps (**Myers reference
+here instead?). Instead, what we are really looking for the set of
+short-read unitigs that best covers each PBLR. Building this set is
+non-trivial, especially when a PBLR spans a repeat region. A dynamic
+programming approach that takes into account both alignment identity
+as well as the length of the alignment is necessary. The mummer suite
+includes a tool, delta-filter, which implements a modified Longest
+Increasing Subsequence algorithm which is tuned for precisely this
+application. Once the set of unitigs that best covers each PBLR is
+calculated by delta-filter, the resulting alignments are used by the
+show-snps program to identify bases of the PBLR that conflict with the
+unitigs. A small python script uses the show-snps output to correct
+the PBLR. The python script also implements a more conservative
+trimming algorithm than pacbioToCA.  Firstly, the ends of the PBLR are
+trimmed if no unitig coverage is found over these bases. Internal
+regions without unitig coverage are considered uncorrected and
+therefore assumed to remain at the 15% canonical error rate. Regions
+with unitig coverage are assumed to be corrected and therefore only
+have an error rate of 1%. A user specified minimum correction
+identity, specifies the lowest identity a read can be to be classified
+as "corrected". Using the assumptions above a read's identity is
+calculated and only if it fails to meet the correction threshold is it
+split. Splitting begins by removing the largest uncorrected region of
+the read and then recursively applying the previous steps to each
+resulting segment. This algorithm helps favor sequence read continuity
+over pure accuracy, but because the identity parameter is
+user-tunable, it can easily be adjusted so identity is favored over
+continuity.
+
+Discussion
+
+The new method of preassmbly based correction of PBLR was applied to
+an existing de novo assembly project of the rice (Oryza Sativa)
+genome. Short-read only assemblies using the ALLPATHS assembler
+produced an N50 contig size of roughly 20kb. In comparison, pacbioToCA
+correction of PBLRs resulted in an assembly with an N50 unitig size of
+approximately 50kb. Using the preassembly method, N50 contig size
+improved three fold to 135kb.
+
+
+
+
+
