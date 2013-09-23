@@ -24,7 +24,7 @@ Methods
 Discussion
 
 	-Rice Assembly (n50 improvement)
-	-Performance (timming?)
+	-Performance (timing?)
 	-Reliability (compared to pacbioToCA)
 
 	-Hybrid HGAP attempts were unsuccessful
@@ -37,8 +37,8 @@ Introduction
 
 One of the main technical hurdles involved in using Pacific
 Bioscience's long reads (PBLR) in de novo assembly is the relatively
-high per-base error rate. In contrast to other second generation
-sequencing platforms such as Illumina's HiSeq which has a per base
+high per-base error rate. In contrast to second generation
+sequencing platforms such as Illumina's HiSeq which have a per base
 error rate of approximately 2%, PBLRs have a reported error rate of
 15% (**HGAP reference). As of current, there are no assemblers that
 are equipped to handle data with this high of an error rate
